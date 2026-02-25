@@ -14,6 +14,8 @@ interface User {
 interface AuthState {
     user: User | null;
     token: string | null;
+    _hasHydrated: boolean; // Flag penanda hydration
+    setHasHydrated: (state: boolean) => void;
     setAuth: (user: User, token: string) => void;
     logout: () => void;
 }
@@ -23,11 +25,17 @@ export const useAuthStore = create<AuthState>()(
         (set) => ({
             user: null,
             token: null,
+            _hasHydrated: false,
+            setHasHydrated: (state) => set({ _hasHydrated: state }),
             setAuth: (user, token) => set({ user, token }),
             logout: () => set({ user: null, token: null }),
         }),
         {
-            name: 'auth-storage', // token & user disimpen di localStorage agar tidak hilang saat direfresh
+            name: 'auth-storage',
+            // Fungsi ini dipanggil otomatis setelah Zustand selesai meload data dari localStorage
+            onRehydrateStorage: () => (state) => {
+                state?.setHasHydrated(true);
+            },
         }
     )
 );
