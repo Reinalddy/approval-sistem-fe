@@ -9,18 +9,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { FilePlus, Send, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FilePlus, Send, Loader2, Image as ImageIcon, Eye, CheckCircle, Clock } from 'lucide-react';
 
 export default function UserDashboard() {
     const [claims, setClaims] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-    // State untuk Modal Form
+    // State Modal Buat Klaim
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({ title: '', description: '', amount: '' });
     const [file, setFile] = useState<File | null>(null);
+
+    // State Modal Detail
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [selectedClaim, setSelectedClaim] = useState<any | null>(null);
 
     const fetchMyClaims = async () => {
         try {
@@ -51,14 +56,13 @@ export default function UserDashboard() {
         }
     };
 
-    // Fungsi untuk Submit Form Buat Klaim Baru
-    const onSubmitNewClaim = async (e: React.FormEvent) => {
+    // Fungsi Buat Klaim dengan Opsi "Save Draft" atau "Direct Submit"
+    const onSubmitNewClaim = async (e: React.FormEvent, actionType: 'draft' | 'submit') => {
         e.preventDefault();
         if (isSubmitting) return;
 
         setIsSubmitting(true);
         try {
-            // Wajib menggunakan FormData karena ada file gambar
             const data = new FormData();
             data.append('title', formData.title);
             data.append('description', formData.description);
@@ -67,15 +71,22 @@ export default function UserDashboard() {
                 data.append('attachment', file);
             }
 
-            await api.post('/claims', data, {
-                headers: { 'Content-Type': 'multipart/form-data' }, // Header khusus untuk upload file
+            // 1. Selalu buat draft terlebih dahulu sesuai aturan urutan sistem
+            const res = await api.post('/claims', data, {
+                headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            // Reset form dan tutup modal setelah sukses
+            const newClaimId = res.data.data.id;
+
+            // 2. Jika user pilih "Langsung Ajukan", tembak API submit
+            if (actionType === 'submit') {
+                await api.patch(`/claims/${newClaimId}/submit`, { status: 'submitted' });
+            }
+
             setFormData({ title: '', description: '', amount: '' });
             setFile(null);
             setIsDialogOpen(false);
-            fetchMyClaims(); // Refresh tabel
+            fetchMyClaims();
         } catch (error) {
             console.error('Gagal membuat klaim baru', error);
         } finally {
@@ -83,16 +94,77 @@ export default function UserDashboard() {
         }
     };
 
+    const openDetail = (claim: any) => {
+        setSelectedClaim(claim);
+        setIsDetailOpen(true);
+    };
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'draft': return <Badge variant="secondary">Draft</Badge>;
-            case 'submitted': return <Badge className="bg-blue-500">Submitted</Badge>;
-            case 'reviewed': return <Badge className="bg-yellow-500">Reviewed</Badge>;
+            case 'submitted': return <Badge className="bg-blue-500">Submitted (Menunggu Verifikasi)</Badge>;
+            case 'reviewed': return <Badge className="bg-yellow-500">Reviewed (Menunggu Keputusan)</Badge>;
             case 'approved': return <Badge className="bg-green-500">Approved</Badge>;
             case 'rejected': return <Badge variant="destructive">Rejected</Badge>;
             default: return <Badge>{status}</Badge>;
         }
     };
+
+    // Filter Data untuk Tabs
+    const draftClaims = claims.filter(c => c.status === 'draft');
+    const processClaims = claims.filter(c => c.status === 'submitted' || c.status === 'reviewed');
+    const doneClaims = claims.filter(c => c.status === 'approved' || c.status === 'rejected');
+
+    const renderTable = (data: any[]) => (
+        <div className="border rounded-md bg-white shadow-sm overflow-hidden mt-4">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Judul Klaim</TableHead>
+                        <TableHead>Jumlah (Rp)</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {isLoading ? (
+                        <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Memuat data...</TableCell></TableRow>
+                    ) : data.length === 0 ? (
+                        <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Belum ada data klaim di kategori ini.</TableCell></TableRow>
+                    ) : (
+                        data.map((claim) => (
+                            <TableRow key={claim.id}>
+                                <TableCell className="font-medium">
+                                    {claim.title}
+                                    {claim.attachment_path && (
+                                        <span className="text-xs text-blue-500 flex items-center mt-1">
+                                            <ImageIcon className="w-3 h-3 mr-1" /> Berkas terlampir
+                                        </span>
+                                    )}
+                                </TableCell>
+                                <TableCell>{new Intl.NumberFormat('id-ID').format(claim.amount)}</TableCell>
+                                <TableCell>{getStatusBadge(claim.status)}</TableCell>
+                                <TableCell className="text-right space-x-2">
+                                    <Button size="sm" variant="ghost" onClick={() => openDetail(claim)}>
+                                        <Eye className="w-4 h-4 mr-2" /> Detail
+                                    </Button>
+                                    {claim.status === 'draft' && (
+                                        <Button
+                                            size="sm"
+                                            onClick={() => handleSubmitClaim(claim.id)}
+                                            disabled={actionLoading === claim.id}
+                                        >
+                                            {actionLoading === claim.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4 mr-2" /> Ajukan</>}
+                                        </Button>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        ))
+                    )}
+                </TableBody>
+            </Table>
+        </div>
+    );
 
     return (
         <div className="space-y-6">
@@ -102,71 +174,42 @@ export default function UserDashboard() {
                     <p className="text-muted-foreground">Kelola pengajuan klaim asuransi Anda di sini.</p>
                 </div>
 
-                {/* MODAL DIALOG BUAT KLAIM */}
+                {/* MODAL FORM BUAT KLAIM */}
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button>
-                            <FilePlus className="w-4 h-4 mr-2" /> Buat Klaim Baru
-                        </Button>
+                        <Button><FilePlus className="w-4 h-4 mr-2" /> Buat Klaim Baru</Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent className="sm:max-w-[500px]">
                         <DialogHeader>
                             <DialogTitle>Buat Klaim Asuransi</DialogTitle>
-                            <DialogDescription>
-                                Isi detail klaim Anda. Bukti gambar bersifat opsional namun disarankan.
-                            </DialogDescription>
+                            <DialogDescription>Isi detail klaim Anda. Bukti gambar bersifat opsional namun disarankan.</DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={onSubmitNewClaim} className="space-y-4 mt-4">
+                        <form className="space-y-4 mt-4">
                             <div className="space-y-2">
                                 <Label htmlFor="title">Judul Klaim</Label>
-                                <Input
-                                    id="title"
-                                    placeholder="Contoh: Rawat Inap Demam Berdarah"
-                                    value={formData.title}
-                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    required
-                                />
+                                <Input id="title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="amount">Jumlah Tagihan (Rp)</Label>
-                                <Input
-                                    id="amount"
-                                    type="number"
-                                    min="0"
-                                    placeholder="Contoh: 2500000"
-                                    value={formData.amount}
-                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                    required
-                                />
+                                <Input id="amount" type="number" min="0" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} required />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="description">Deskripsi Lengkap</Label>
-                                <Textarea
-                                    id="description"
-                                    placeholder="Jelaskan detail pengobatan atau kejadian..."
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    required
-                                />
+                                <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="attachment">Upload Bukti (Opsional)</Label>
-                                <div className="flex items-center gap-3">
-                                    <Input
-                                        id="attachment"
-                                        type="file"
-                                        accept="image/png, image/jpeg, image/jpg"
-                                        onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
-                                        className="cursor-pointer"
-                                    />
-                                    {file && <ImageIcon className="w-5 h-5 text-green-500" />}
-                                </div>
+                                <Input id="attachment" type="file" accept="image/*" onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} className="cursor-pointer" />
                             </div>
+
                             <div className="pt-4 flex justify-end gap-2">
-                                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>
-                                <Button type="submit" disabled={isSubmitting}>
-                                    {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                    {isSubmitting ? 'Menyimpan...' : 'Simpan Draft'}
+                                {/* Tombol Simpan Draft Saja */}
+                                <Button type="button" variant="secondary" onClick={(e) => onSubmitNewClaim(e, 'draft')} disabled={isSubmitting}>
+                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Simpan Draft'}
+                                </Button>
+                                {/* Tombol Langsung Submit */}
+                                <Button type="button" className="bg-blue-600 hover:bg-blue-700" onClick={(e) => onSubmitNewClaim(e, 'submit')} disabled={isSubmitting}>
+                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Langsung Ajukan'}
                                 </Button>
                             </div>
                         </form>
@@ -174,66 +217,65 @@ export default function UserDashboard() {
                 </Dialog>
             </div>
 
-            {/* TABEL DATA KLAIM */}
-            <div className="border rounded-md bg-white shadow-sm">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Judul Klaim</TableHead>
-                            <TableHead>Deskripsi</TableHead>
-                            <TableHead>Jumlah (Rp)</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Aksi</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Memuat data...</TableCell>
-                            </TableRow>
-                        ) : claims.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Belum ada data klaim.</TableCell>
-                            </TableRow>
-                        ) : (
-                            claims.map((claim) => (
-                                <TableRow key={claim.id}>
-                                    <TableCell className="font-medium">
-                                        <div className="flex flex-col">
-                                            <span>{claim.title}</span>
-                                            {/* Indikator jika ada gambar */}
-                                            {claim.attachment_path && (
-                                                <span className="text-xs text-blue-500 flex items-center mt-1">
-                                                    <ImageIcon className="w-3 h-3 mr-1" /> Berkas terlampir
-                                                </span>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="truncate max-w-xs">{claim.description}</TableCell>
-                                    <TableCell>{new Intl.NumberFormat('id-ID').format(claim.amount)}</TableCell>
-                                    <TableCell>{getStatusBadge(claim.status)}</TableCell>
-                                    <TableCell className="text-right">
-                                        {claim.status === 'draft' && (
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => handleSubmitClaim(claim.id)}
-                                                disabled={actionLoading === claim.id}
-                                            >
-                                                {actionLoading === claim.id ? (
-                                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                                ) : (
-                                                    <><Send className="w-4 h-4 mr-2" /> Ajukan</>
-                                                )}
-                                            </Button>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+            {/* TABS KATEGORI KLAIM */}
+            <Tabs defaultValue="semua" className="w-full">
+                <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
+                    <TabsTrigger value="semua">Semua</TabsTrigger>
+                    <TabsTrigger value="draft">Draft</TabsTrigger>
+                    <TabsTrigger value="proses">Diproses</TabsTrigger>
+                    <TabsTrigger value="selesai">Selesai</TabsTrigger>
+                </TabsList>
+                <TabsContent value="semua">{renderTable(claims)}</TabsContent>
+                <TabsContent value="draft">{renderTable(draftClaims)}</TabsContent>
+                <TabsContent value="proses">{renderTable(processClaims)}</TabsContent>
+                <TabsContent value="selesai">{renderTable(doneClaims)}</TabsContent>
+            </Tabs>
+
+            {/* MODAL DETAIL KLAIM */}
+            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Detail Klaim</DialogTitle>
+                    </DialogHeader>
+                    {selectedClaim && (
+                        <div className="space-y-4 mt-2">
+                            <div>
+                                <Label className="text-muted-foreground text-xs">Judul Klaim</Label>
+                                <p className="font-semibold">{selectedClaim.title}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label className="text-muted-foreground text-xs">Status Saat Ini</Label>
+                                    <div className="mt-1">{getStatusBadge(selectedClaim.status)}</div>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground text-xs">Total Tagihan</Label>
+                                    <p className="font-bold text-lg">Rp {new Intl.NumberFormat('id-ID').format(selectedClaim.amount)}</p>
+                                </div>
+                            </div>
+                            <div>
+                                <Label className="text-muted-foreground text-xs">Deskripsi</Label>
+                                <div className="p-3 bg-slate-50 rounded-md text-sm mt-1 whitespace-pre-wrap border">
+                                    {selectedClaim.description}
+                                </div>
+                            </div>
+                            {selectedClaim.attachment_path && (
+                                <div>
+                                    <Label className="text-muted-foreground text-xs mb-1 block">Bukti Terlampir</Label>
+                                    <div className="border rounded-md overflow-hidden bg-slate-100 flex justify-center items-center h-48">
+                                        {/* Pastikan URL backend kamu sesuai (.env NEXT_PUBLIC_API_URL dikurangi /api) */}
+                                        <img
+                                            src={`http://localhost:8000/storage/${selectedClaim.attachment_path}`}
+                                            alt="Bukti Klaim"
+                                            className="max-h-full object-contain"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

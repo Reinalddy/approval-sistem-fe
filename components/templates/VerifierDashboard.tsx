@@ -5,19 +5,29 @@ import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Loader2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CheckCircle, Eye, Loader2, Image as ImageIcon } from 'lucide-react';
 
 export default function VerifierDashboard() {
-    const [claims, setClaims] = useState<any[]>([]);
+    const [pendingClaims, setPendingClaims] = useState<any[]>([]);
+    const [historyClaims, setHistoryClaims] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-    const fetchSubmittedClaims = async () => {
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [selectedClaim, setSelectedClaim] = useState<any | null>(null);
+
+    const fetchData = async () => {
         try {
             setIsLoading(true);
-            // Hanya mengambil klaim berstatus submitted sesuai requirement Verifier
-            const res = await api.get('/claims/submitted');
-            setClaims(res.data.data);
+            const [resPending, resHistory] = await Promise.all([
+                api.get('/claims/submitted'),
+                api.get('/claims/history')
+            ]);
+            setPendingClaims(resPending.data.data);
+            setHistoryClaims(resHistory.data.data);
         } catch (error) {
             console.error('Gagal mengambil data', error);
         } finally {
@@ -25,78 +35,135 @@ export default function VerifierDashboard() {
         }
     };
 
-    useEffect(() => {
-        fetchSubmittedClaims();
-    }, []);
+    useEffect(() => { fetchData(); }, []);
 
-    // Mengubah status klaim menjadi reviewed
     const handleVerify = async (id: number) => {
-        if (actionLoading === id) return; // Mencegah multiple clicks/brute force submit
-
+        if (actionLoading === id) return;
         setActionLoading(id);
         try {
             await api.patch(`/claims/${id}/verify`, { status: 'reviewed' });
-            fetchSubmittedClaims(); // Refresh tabel setelah sukses
+            fetchData();
+            setIsDetailOpen(false);
         } catch (error) {
-            console.error('Gagal verifikasi klaim', error);
+            console.error('Gagal verifikasi', error);
         } finally {
             setActionLoading(null);
         }
     };
 
+    const openDetail = (claim: any) => {
+        setSelectedClaim(claim);
+        setIsDetailOpen(true);
+    };
+
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'submitted': return <Badge className="bg-blue-500">Submitted</Badge>;
+            case 'reviewed': return <Badge className="bg-yellow-500">Reviewed</Badge>;
+            case 'approved': return <Badge className="bg-green-500">Approved</Badge>;
+            case 'rejected': return <Badge variant="destructive">Rejected</Badge>;
+            default: return <Badge>{status}</Badge>;
+        }
+    };
+
+    const renderTable = (data: any[], isHistory: boolean) => (
+        <div className="border rounded-md bg-white shadow-sm overflow-hidden mt-4">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Pemohon</TableHead>
+                        <TableHead>Judul Klaim</TableHead>
+                        <TableHead>Jumlah (Rp)</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {isLoading ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Memuat data...</TableCell></TableRow>
+                    ) : data.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Tidak ada data.</TableCell></TableRow>
+                    ) : (
+                        data.map((claim) => (
+                            <TableRow key={claim.id}>
+                                <TableCell className="font-medium">{claim.user?.name || 'Unknown'}</TableCell>
+                                <TableCell>
+                                    {claim.title}
+                                    {claim.attachment_path && (
+                                        <span className="text-xs text-blue-500 flex items-center mt-1">
+                                            <ImageIcon className="w-3 h-3 mr-1" /> Terlampir
+                                        </span>
+                                    )}
+                                </TableCell>
+                                <TableCell>{new Intl.NumberFormat('id-ID').format(claim.amount)}</TableCell>
+                                <TableCell>{getStatusBadge(claim.status)}</TableCell>
+                                <TableCell className="text-right space-x-2">
+                                    <Button size="sm" variant="ghost" onClick={() => openDetail(claim)}>
+                                        <Eye className="w-4 h-4 mr-2" /> Detail
+                                    </Button>
+                                    {!isHistory && (
+                                        <Button size="sm" onClick={() => handleVerify(claim.id)} disabled={actionLoading === claim.id}>
+                                            {actionLoading === claim.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-2" /> Verify</>}
+                                        </Button>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        ))
+                    )}
+                </TableBody>
+            </Table>
+        </div>
+    );
+
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold tracking-tight">Daftar Verifikasi Klaim</h2>
+                <h2 className="text-2xl font-bold tracking-tight">Verifikasi Klaim</h2>
                 <p className="text-muted-foreground">Periksa dan validasi klaim yang diajukan oleh User.</p>
             </div>
 
-            <div className="border rounded-md bg-white shadow-sm">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Pemohon</TableHead>
-                            <TableHead>Judul Klaim</TableHead>
-                            <TableHead>Jumlah (Rp)</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Aksi</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8">Memuat data...</TableCell>
-                            </TableRow>
-                        ) : claims.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8">Tidak ada klaim yang menunggu verifikasi.</TableCell>
-                            </TableRow>
-                        ) : (
-                            claims.map((claim) => (
-                                <TableRow key={claim.id}>
-                                    <TableCell className="font-medium">{claim.user?.name || 'Unknown'}</TableCell>
-                                    <TableCell>{claim.title}</TableCell>
-                                    <TableCell>{new Intl.NumberFormat('id-ID').format(claim.amount)}</TableCell>
-                                    <TableCell><Badge className="bg-blue-500">Submitted</Badge></TableCell>
-                                    <TableCell className="text-right">
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleVerify(claim.id)}
-                                            disabled={actionLoading === claim.id}
-                                        >
-                                            {actionLoading === claim.id ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <><CheckCircle className="w-4 h-4 mr-2" /> Verify</>
-                                            )}
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+            <Tabs defaultValue="pending" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+                    <TabsTrigger value="pending">Menunggu Verifikasi</TabsTrigger>
+                    <TabsTrigger value="history">Riwayat</TabsTrigger>
+                </TabsList>
+                <TabsContent value="pending">{renderTable(pendingClaims, false)}</TabsContent>
+                <TabsContent value="history">{renderTable(historyClaims, true)}</TabsContent>
+            </Tabs>
+
+            {/* MODAL DETAIL (Sama seperti sebelumnya, tapi tombol Verify disembunyikan jika history) */}
+            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader><DialogTitle>Pemeriksaan Detail Klaim</DialogTitle></DialogHeader>
+                    {selectedClaim && (
+                        <div className="space-y-4 mt-2">
+                            <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                                <div><Label className="text-xs">Pemohon</Label><p className="font-semibold">{selectedClaim.user?.name}</p></div>
+                                <div><Label className="text-xs">Total Tagihan</Label><p className="font-bold text-lg text-blue-600">Rp {new Intl.NumberFormat('id-ID').format(selectedClaim.amount)}</p></div>
+                            </div>
+                            <div><Label className="text-xs">Judul Klaim</Label><p className="font-medium">{selectedClaim.title}</p></div>
+                            <div><Label className="text-xs">Deskripsi</Label><div className="p-3 bg-slate-50 rounded text-sm mt-1 whitespace-pre-wrap border">{selectedClaim.description}</div></div>
+                            {selectedClaim.attachment_path && (
+                                <div>
+                                    <Label className="text-xs mb-1 block">Bukti Terlampir</Label>
+                                    <div className="border rounded bg-slate-100 flex justify-center p-2">
+                                        <img src={`http://localhost:8000/storage/${selectedClaim.attachment_path}`} alt="Bukti" className="max-h-64 object-contain rounded" />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pt-4 flex justify-end gap-2 border-t">
+                                <Button variant="outline" onClick={() => setIsDetailOpen(false)}>Tutup</Button>
+                                {selectedClaim.status === 'submitted' && (
+                                    <Button onClick={() => handleVerify(selectedClaim.id)} disabled={actionLoading === selectedClaim.id}>
+                                        {actionLoading === selectedClaim.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verifikasi (Ubah ke Reviewed)'}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
