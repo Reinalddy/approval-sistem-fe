@@ -1,19 +1,19 @@
 'use client';
 
 import { useAuthStore } from '@/store/useAuthStore';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { LogOut, LayoutDashboard, Loader2 } from 'lucide-react';
+import { LogOut, LayoutDashboard, FileText, Loader2, ShieldCheck } from 'lucide-react';
 import api from '@/lib/api';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-    // Ambil _hasHydrated dari store
+export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
     const { user, logout, _hasHydrated } = useAuthStore();
     const router = useRouter();
+    const pathname = usePathname(); // Untuk mendeteksi menu yang aktif
 
     useEffect(() => {
-        // Hanya lakukan pengecekan JIKA Zustand sudah selesai mengambil data dari localStorage
         if (_hasHydrated && !user) {
             router.push('/login');
         }
@@ -30,8 +30,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
     };
 
-    // Tampilkan loading screen menutupi seluruh layar selama proses hydration
-    // Ini mencegah UI berkedip (flickering) saat di-refresh
     if (!_hasHydrated || !user) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -41,28 +39,55 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col">
-            {/* Topbar Navigation */}
-            <header className="bg-white border-b px-6 py-4 flex justify-between items-center sticky top-0 z-10">
-                <div className="flex items-center gap-2 text-primary font-bold text-xl">
-                    <LayoutDashboard className="w-6 h-6" />
-                    Approval System
+        <div className="flex h-screen bg-slate-50 overflow-hidden">
+
+            {/* SIDEBAR */}
+            <aside className="w-64 bg-white border-r flex flex-col hidden md:flex">
+                <div className="h-16 flex items-center px-6 border-b">
+                    <ShieldCheck className="w-6 h-6 text-primary mr-2" />
+                    <span className="font-bold text-lg text-primary">AQ Approval</span>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="text-right">
-                        <p className="text-sm font-semibold">{user.name}</p>
+
+                <nav className="flex-1 p-4 space-y-2">
+                    <Link href="/dashboard">
+                        <span className={`flex items-center px-4 py-3 rounded-md transition-colors ${pathname === '/dashboard' ? 'bg-slate-100 text-primary font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            <LayoutDashboard className="w-5 h-5 mr-3" />
+                            Dashboard
+                        </span>
+                    </Link>
+                    <Link href="/pengajuan">
+                        <span className={`flex items-center px-4 py-3 rounded-md transition-colors ${pathname === '/pengajuan' ? 'bg-slate-100 text-primary font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
+                            <FileText className="w-5 h-5 mr-3" />
+                            Pengajuan Klaim
+                        </span>
+                    </Link>
+                </nav>
+
+                <div className="p-4 border-t">
+                    <div className="mb-4 px-2">
+                        <p className="text-sm font-semibold truncate">{user.name}</p>
                         <p className="text-xs text-muted-foreground">Role: {user.role.name}</p>
                     </div>
-                    <Button variant="destructive" size="sm" onClick={handleLogout}>
+                    <Button variant="destructive" className="w-full justify-start" onClick={handleLogout}>
                         <LogOut className="w-4 h-4 mr-2" /> Logout
                     </Button>
                 </div>
-            </header>
+            </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
-                {children}
-            </main>
+            {/* MAIN CONTENT AREA */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Mobile Header (Hanya muncul di layar kecil) */}
+                <header className="md:hidden bg-white border-b h-16 flex items-center justify-between px-4">
+                    <div className="font-bold text-primary">AQ Approval</div>
+                    <Button variant="ghost" size="sm" onClick={handleLogout}><LogOut className="w-4 h-4" /></Button>
+                </header>
+
+                {/* Dynamic Page Content */}
+                <main className="flex-1 overflow-y-auto p-6">
+                    {children}
+                </main>
+            </div>
+
         </div>
     );
 }
