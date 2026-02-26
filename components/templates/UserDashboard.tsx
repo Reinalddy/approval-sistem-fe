@@ -5,12 +5,22 @@ import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { FilePlus, Send, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { FilePlus, Send, Loader2, Image as ImageIcon } from 'lucide-react';
 
 export default function UserDashboard() {
     const [claims, setClaims] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<number | null>(null);
+
+    // State untuk Modal Form
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formData, setFormData] = useState({ title: '', description: '', amount: '' });
+    const [file, setFile] = useState<File | null>(null);
 
     const fetchMyClaims = async () => {
         try {
@@ -28,18 +38,48 @@ export default function UserDashboard() {
         fetchMyClaims();
     }, []);
 
-    // Fungsi Submit (Draft -> Submitted)
     const handleSubmitClaim = async (id: number) => {
-        if (actionLoading === id) return; // Mencegah double click (brute force submit)
-
+        if (actionLoading === id) return;
         setActionLoading(id);
         try {
             await api.patch(`/claims/${id}/submit`, { status: 'submitted' });
-            fetchMyClaims(); // Refresh data setelah sukses
+            fetchMyClaims();
         } catch (error) {
             console.error('Gagal submit klaim', error);
         } finally {
             setActionLoading(null);
+        }
+    };
+
+    // Fungsi untuk Submit Form Buat Klaim Baru
+    const onSubmitNewClaim = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (isSubmitting) return;
+
+        setIsSubmitting(true);
+        try {
+            // Wajib menggunakan FormData karena ada file gambar
+            const data = new FormData();
+            data.append('title', formData.title);
+            data.append('description', formData.description);
+            data.append('amount', formData.amount);
+            if (file) {
+                data.append('attachment', file);
+            }
+
+            await api.post('/claims', data, {
+                headers: { 'Content-Type': 'multipart/form-data' }, // Header khusus untuk upload file
+            });
+
+            // Reset form dan tutup modal setelah sukses
+            setFormData({ title: '', description: '', amount: '' });
+            setFile(null);
+            setIsDialogOpen(false);
+            fetchMyClaims(); // Refresh tabel
+        } catch (error) {
+            console.error('Gagal membuat klaim baru', error);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -58,15 +98,83 @@ export default function UserDashboard() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Klaim Saya</h2>
+                    <h2 className="text-2xl font-bold tracking-tight">Pengajuan Klaim</h2>
                     <p className="text-muted-foreground">Kelola pengajuan klaim asuransi Anda di sini.</p>
                 </div>
-                {/* Nanti kita akan buat komponen Modal Dialog untuk form Create Claim di tombol ini */}
-                <Button>
-                    <FilePlus className="w-4 h-4 mr-2" /> Buat Klaim Baru
-                </Button>
+
+                {/* MODAL DIALOG BUAT KLAIM */}
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button>
+                            <FilePlus className="w-4 h-4 mr-2" /> Buat Klaim Baru
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                        <DialogHeader>
+                            <DialogTitle>Buat Klaim Asuransi</DialogTitle>
+                            <DialogDescription>
+                                Isi detail klaim Anda. Bukti gambar bersifat opsional namun disarankan.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <form onSubmit={onSubmitNewClaim} className="space-y-4 mt-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="title">Judul Klaim</Label>
+                                <Input
+                                    id="title"
+                                    placeholder="Contoh: Rawat Inap Demam Berdarah"
+                                    value={formData.title}
+                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="amount">Jumlah Tagihan (Rp)</Label>
+                                <Input
+                                    id="amount"
+                                    type="number"
+                                    min="0"
+                                    placeholder="Contoh: 2500000"
+                                    value={formData.amount}
+                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="description">Deskripsi Lengkap</Label>
+                                <Textarea
+                                    id="description"
+                                    placeholder="Jelaskan detail pengobatan atau kejadian..."
+                                    value={formData.description}
+                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="attachment">Upload Bukti (Opsional)</Label>
+                                <div className="flex items-center gap-3">
+                                    <Input
+                                        id="attachment"
+                                        type="file"
+                                        accept="image/png, image/jpeg, image/jpg"
+                                        onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
+                                        className="cursor-pointer"
+                                    />
+                                    {file && <ImageIcon className="w-5 h-5 text-green-500" />}
+                                </div>
+                            </div>
+                            <div className="pt-4 flex justify-end gap-2">
+                                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>
+                                <Button type="submit" disabled={isSubmitting}>
+                                    {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                    {isSubmitting ? 'Menyimpan...' : 'Simpan Draft'}
+                                </Button>
+                            </div>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </div>
 
+            {/* TABEL DATA KLAIM */}
             <div className="border rounded-md bg-white shadow-sm">
                 <Table>
                     <TableHeader>
@@ -81,25 +189,30 @@ export default function UserDashboard() {
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                    Memuat data...
-                                </TableCell>
+                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Memuat data...</TableCell>
                             </TableRow>
                         ) : claims.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                                    Belum ada data klaim.
-                                </TableCell>
+                                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Belum ada data klaim.</TableCell>
                             </TableRow>
                         ) : (
                             claims.map((claim) => (
                                 <TableRow key={claim.id}>
-                                    <TableCell className="font-medium">{claim.title}</TableCell>
+                                    <TableCell className="font-medium">
+                                        <div className="flex flex-col">
+                                            <span>{claim.title}</span>
+                                            {/* Indikator jika ada gambar */}
+                                            {claim.attachment_path && (
+                                                <span className="text-xs text-blue-500 flex items-center mt-1">
+                                                    <ImageIcon className="w-3 h-3 mr-1" /> Berkas terlampir
+                                                </span>
+                                            )}
+                                        </div>
+                                    </TableCell>
                                     <TableCell className="truncate max-w-xs">{claim.description}</TableCell>
                                     <TableCell>{new Intl.NumberFormat('id-ID').format(claim.amount)}</TableCell>
                                     <TableCell>{getStatusBadge(claim.status)}</TableCell>
                                     <TableCell className="text-right">
-                                        {/* User hanya bisa mensubmit jika statusnya masih draft */}
                                         {claim.status === 'draft' && (
                                             <Button
                                                 size="sm"
