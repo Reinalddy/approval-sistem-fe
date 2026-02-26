@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { LogOut, LayoutDashboard, FileText, Loader2, ShieldCheck } from 'lucide-react';
 import api from '@/lib/api';
+import { Toaster } from "@/components/ui/sonner";
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
     const { user, logout, _hasHydrated } = useAuthStore();
@@ -87,7 +88,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
                     {children}
                 </main>
             </div>
-
+            <Toaster position="top-right" richColors />
         </div>
     );
 }

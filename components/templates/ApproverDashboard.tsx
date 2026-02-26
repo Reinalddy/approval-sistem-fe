@@ -7,8 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ThumbsUp, ThumbsDown, Eye, Loader2, Image as ImageIcon } from 'lucide-react';
+import { toast } from "sonner"; // Import Toast
 
 export default function ApproverDashboard() {
     const [pendingClaims, setPendingClaims] = useState<any[]>([]);
@@ -18,6 +20,14 @@ export default function ApproverDashboard() {
 
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [selectedClaim, setSelectedClaim] = useState<any | null>(null);
+
+    // State untuk Konfirmasi Dialog (Bisa Approve atau Reject)
+    const [confirmDialog, setConfirmDialog] = useState<{
+        isOpen: boolean;
+        id: number | null;
+        actionType: 'approve' | 'reject' | null;
+        statusValue: 'approved' | 'rejected' | null;
+    }>({ isOpen: false, id: null, actionType: null, statusValue: null });
 
     const fetchData = async () => {
         try {
@@ -29,7 +39,7 @@ export default function ApproverDashboard() {
             setPendingClaims(resPending.data.data);
             setHistoryClaims(resHistory.data.data);
         } catch (error) {
-            console.error('Gagal mengambil data', error);
+            toast.error("Gagal mengambil data klaim dari server");
         } finally {
             setIsLoading(false);
         }
@@ -37,23 +47,30 @@ export default function ApproverDashboard() {
 
     useEffect(() => { fetchData(); }, []);
 
-    const handleApproval = async (id: number, actionType: 'approve' | 'reject', statusValue: 'approved' | 'rejected') => {
-        if (actionLoading) return;
+    // Eksekusi API Approval/Reject setelah dikonfirmasi
+    const executeApproval = async () => {
+        const { id, actionType, statusValue } = confirmDialog;
+        if (!id || !actionType || !statusValue) return;
+
         setActionLoading({ id, action: actionType });
         try {
             await api.patch(`/claims/${id}/${actionType}`, { status: statusValue });
+
+            // Beri notifikasi sesuai aksi
+            if (actionType === 'approve') {
+                toast.success("Klaim berhasil disetujui!");
+            } else {
+                toast.success("Klaim telah ditolak.");
+            }
+
             fetchData();
             setIsDetailOpen(false);
         } catch (error) {
-            console.error(`Gagal ${actionType}`, error);
+            toast.error(`Gagal memproses klaim. Silakan coba lagi.`);
         } finally {
             setActionLoading(null);
+            setConfirmDialog({ isOpen: false, id: null, actionType: null, statusValue: null });
         }
-    };
-
-    const openDetail = (claim: any) => {
-        setSelectedClaim(claim);
-        setIsDetailOpen(true);
     };
 
     const getStatusBadge = (status: string) => {
@@ -79,33 +96,39 @@ export default function ApproverDashboard() {
                 </TableHeader>
                 <TableBody>
                     {isLoading ? (
-                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Memuat data...</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={5} className="text-center py-8">Memuat data...</TableCell></TableRow>
                     ) : data.length === 0 ? (
-                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Tidak ada data.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={5} className="text-center py-8">Tidak ada data.</TableCell></TableRow>
                     ) : (
                         data.map((claim) => (
                             <TableRow key={claim.id}>
                                 <TableCell className="font-medium">{claim.user?.name || 'Unknown'}</TableCell>
                                 <TableCell>
                                     {claim.title}
-                                    {claim.attachment_path && (
-                                        <span className="text-xs text-blue-500 flex items-center mt-1">
-                                            <ImageIcon className="w-3 h-3 mr-1" /> Terlampir
-                                        </span>
-                                    )}
+                                    {claim.attachment_path && <span className="text-xs text-blue-500 flex items-center mt-1"><ImageIcon className="w-3 h-3 mr-1" /> Terlampir</span>}
                                 </TableCell>
                                 <TableCell>{new Intl.NumberFormat('id-ID').format(claim.amount)}</TableCell>
                                 <TableCell><div className="flex justify-center">{getStatusBadge(claim.status)}</div></TableCell>
                                 <TableCell className="text-center space-x-2 flex justify-center">
-                                    <Button size="sm" variant="ghost" onClick={() => openDetail(claim)}>
+                                    <Button size="sm" variant="ghost" onClick={() => { setSelectedClaim(claim); setIsDetailOpen(true); }}>
                                         <Eye className="w-4 h-4 mr-2" /> Detail
                                     </Button>
                                     {!isHistory && (
                                         <>
-                                            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApproval(claim.id, 'approve', 'approved')} disabled={actionLoading?.id === claim.id}>
+                                            <Button
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700"
+                                                onClick={() => setConfirmDialog({ isOpen: true, id: claim.id, actionType: 'approve', statusValue: 'approved' })}
+                                                disabled={actionLoading?.id === claim.id}
+                                            >
                                                 {actionLoading?.id === claim.id && actionLoading.action === 'approve' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4" />}
                                             </Button>
-                                            <Button size="sm" variant="destructive" onClick={() => handleApproval(claim.id, 'reject', 'rejected')} disabled={actionLoading?.id === claim.id}>
+                                            <Button
+                                                size="sm"
+                                                variant="destructive"
+                                                onClick={() => setConfirmDialog({ isOpen: true, id: claim.id, actionType: 'reject', statusValue: 'rejected' })}
+                                                disabled={actionLoading?.id === claim.id}
+                                            >
                                                 {actionLoading?.id === claim.id && actionLoading.action === 'reject' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsDown className="w-4 h-4" />}
                                             </Button>
                                         </>
@@ -135,9 +158,35 @@ export default function ApproverDashboard() {
                 <TabsContent value="history">{renderTable(historyClaims, true)}</TabsContent>
             </Tabs>
 
+            {/* ALERT DIALOG DINAMIS (Bisa Approve atau Reject) */}
+            <AlertDialog open={confirmDialog.isOpen} onOpenChange={(isOpen) => setConfirmDialog({ ...confirmDialog, isOpen })}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {confirmDialog.actionType === 'approve' ? 'Setujui Klaim Ini?' : 'Tolak Klaim Ini?'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {confirmDialog.actionType === 'approve'
+                                ? 'Apakah Anda yakin ingin menyetujui klaim ini? Keputusan ini tidak dapat dibatalkan.'
+                                : 'Apakah Anda yakin ingin menolak klaim ini? Keputusan ini tidak dapat dibatalkan.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={executeApproval}
+                            className={confirmDialog.actionType === 'approve' ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
+                        >
+                            {confirmDialog.actionType === 'approve' ? 'Ya, Setujui' : 'Ya, Tolak'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {/* MODAL DETAIL */}
             <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
                 <DialogContent className="sm:max-w-[500px]">
+                    {/* ... (Isi detail persis seperti sebelumnya) ... */}
                     <DialogHeader><DialogTitle>Keputusan Akhir Klaim</DialogTitle></DialogHeader>
                     {selectedClaim && (
                         <div className="space-y-4 mt-2">
@@ -155,13 +204,12 @@ export default function ApproverDashboard() {
                                     </div>
                                 </div>
                             )}
-
                             <div className="pt-4 flex justify-between items-center border-t">
                                 <Button variant="outline" onClick={() => setIsDetailOpen(false)}>Tutup</Button>
                                 {selectedClaim.status === 'reviewed' && (
                                     <div className="space-x-2">
-                                        <Button variant="destructive" onClick={() => handleApproval(selectedClaim.id, 'reject', 'rejected')} disabled={actionLoading?.id === selectedClaim.id}>Tolak Klaim</Button>
-                                        <Button className="bg-green-600 hover:bg-green-700" onClick={() => handleApproval(selectedClaim.id, 'approve', 'approved')} disabled={actionLoading?.id === selectedClaim.id}>Setujui Klaim</Button>
+                                        <Button variant="destructive" onClick={() => setConfirmDialog({ isOpen: true, id: selectedClaim.id, actionType: 'reject', statusValue: 'rejected' })} disabled={actionLoading?.id === selectedClaim.id}>Tolak Klaim</Button>
+                                        <Button className="bg-green-600 hover:bg-green-700" onClick={() => setConfirmDialog({ isOpen: true, id: selectedClaim.id, actionType: 'approve', statusValue: 'approved' })} disabled={actionLoading?.id === selectedClaim.id}>Setujui Klaim</Button>
                                     </div>
                                 )}
                             </div>

@@ -7,8 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, Eye, Loader2, Image as ImageIcon } from 'lucide-react';
+import { toast } from "sonner"; // Import Toast
 
 export default function VerifierDashboard() {
     const [pendingClaims, setPendingClaims] = useState<any[]>([]);
@@ -18,6 +20,9 @@ export default function VerifierDashboard() {
 
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [selectedClaim, setSelectedClaim] = useState<any | null>(null);
+
+    // State untuk Konfirmasi Dialog
+    const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean; id: number | null }>({ isOpen: false, id: null });
 
     const fetchData = async () => {
         try {
@@ -29,7 +34,7 @@ export default function VerifierDashboard() {
             setPendingClaims(resPending.data.data);
             setHistoryClaims(resHistory.data.data);
         } catch (error) {
-            console.error('Gagal mengambil data', error);
+            toast.error("Gagal mengambil data klaim dari server");
         } finally {
             setIsLoading(false);
         }
@@ -37,23 +42,22 @@ export default function VerifierDashboard() {
 
     useEffect(() => { fetchData(); }, []);
 
-    const handleVerify = async (id: number) => {
-        if (actionLoading === id) return;
-        setActionLoading(id);
+    // Eksekusi API Verifikasi setelah dikonfirmasi
+    const executeVerify = async () => {
+        if (!confirmDialog.id) return;
+
+        setActionLoading(confirmDialog.id);
         try {
-            await api.patch(`/claims/${id}/verify`, { status: 'reviewed' });
+            await api.patch(`/claims/${confirmDialog.id}/verify`, { status: 'reviewed' });
+            toast.success("Klaim berhasil diverifikasi dan diteruskan ke Approver!");
             fetchData();
-            setIsDetailOpen(false);
+            setIsDetailOpen(false); // Tutup detail modal jika terbuka
         } catch (error) {
-            console.error('Gagal verifikasi', error);
+            toast.error("Gagal memverifikasi klaim. Silakan coba lagi.");
         } finally {
             setActionLoading(null);
+            setConfirmDialog({ isOpen: false, id: null }); // Tutup pop-up konfirmasi
         }
-    };
-
-    const openDetail = (claim: any) => {
-        setSelectedClaim(claim);
-        setIsDetailOpen(true);
     };
 
     const getStatusBadge = (status: string) => {
@@ -80,29 +84,29 @@ export default function VerifierDashboard() {
                 </TableHeader>
                 <TableBody>
                     {isLoading ? (
-                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Memuat data...</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={5} className="text-center py-8">Memuat data...</TableCell></TableRow>
                     ) : data.length === 0 ? (
-                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Tidak ada data.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={5} className="text-center py-8">Tidak ada data.</TableCell></TableRow>
                     ) : (
                         data.map((claim) => (
                             <TableRow key={claim.id}>
                                 <TableCell className="font-medium">{claim.user?.name || 'Unknown'}</TableCell>
                                 <TableCell>
                                     {claim.title}
-                                    {claim.attachment_path && (
-                                        <span className="text-xs text-blue-500 flex items-center mt-1">
-                                            <ImageIcon className="w-3 h-3 mr-1" /> Terlampir
-                                        </span>
-                                    )}
+                                    {claim.attachment_path && <span className="text-xs text-blue-500 flex items-center mt-1"><ImageIcon className="w-3 h-3 mr-1" /> Terlampir</span>}
                                 </TableCell>
                                 <TableCell>{new Intl.NumberFormat('id-ID').format(claim.amount)}</TableCell>
                                 <TableCell>{getStatusBadge(claim.status)}</TableCell>
                                 <TableCell className="text-right space-x-2">
-                                    <Button size="sm" variant="ghost" onClick={() => openDetail(claim)}>
+                                    <Button size="sm" variant="ghost" onClick={() => { setSelectedClaim(claim); setIsDetailOpen(true); }}>
                                         <Eye className="w-4 h-4 mr-2" /> Detail
                                     </Button>
                                     {!isHistory && (
-                                        <Button size="sm" onClick={() => handleVerify(claim.id)} disabled={actionLoading === claim.id}>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => setConfirmDialog({ isOpen: true, id: claim.id })}
+                                            disabled={actionLoading === claim.id}
+                                        >
                                             {actionLoading === claim.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle className="w-4 h-4 mr-2" /> Verify</>}
                                         </Button>
                                     )}
@@ -131,9 +135,28 @@ export default function VerifierDashboard() {
                 <TabsContent value="history">{renderTable(historyClaims, true)}</TabsContent>
             </Tabs>
 
-            {/* MODAL DETAIL (Sama seperti sebelumnya, tapi tombol Verify disembunyikan jika history) */}
+            {/* ALERT DIALOG KONFIRMASI VERIFIKASI */}
+            <AlertDialog open={confirmDialog.isOpen} onOpenChange={(isOpen) => setConfirmDialog({ ...confirmDialog, isOpen })}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Verifikasi Klaim Ini?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Anda akan memvalidasi klaim ini. Status akan berubah menjadi "Reviewed" dan akan diteruskan kepada Approver untuk keputusan final.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogAction onClick={executeVerify} className="bg-blue-600 hover:bg-blue-700">
+                            Ya, Verifikasi
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* MODAL DETAIL */}
             <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
                 <DialogContent className="sm:max-w-[500px]">
+                    {/* ... (Isi detail persis seperti sebelumnya) ... */}
                     <DialogHeader><DialogTitle>Pemeriksaan Detail Klaim</DialogTitle></DialogHeader>
                     {selectedClaim && (
                         <div className="space-y-4 mt-2">
@@ -151,12 +174,11 @@ export default function VerifierDashboard() {
                                     </div>
                                 </div>
                             )}
-
                             <div className="pt-4 flex justify-end gap-2 border-t">
                                 <Button variant="outline" onClick={() => setIsDetailOpen(false)}>Tutup</Button>
                                 {selectedClaim.status === 'submitted' && (
-                                    <Button onClick={() => handleVerify(selectedClaim.id)} disabled={actionLoading === selectedClaim.id}>
-                                        {actionLoading === selectedClaim.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verifikasi (Ubah ke Reviewed)'}
+                                    <Button onClick={() => setConfirmDialog({ isOpen: true, id: selectedClaim.id })} disabled={actionLoading === selectedClaim.id}>
+                                        Verifikasi (Ubah ke Reviewed)
                                     </Button>
                                 )}
                             </div>
