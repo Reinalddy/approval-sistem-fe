@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Approval System Frontend
 
-## Getting Started
+A modern, responsive frontend application for an Approval System, built with Next.js and Tailwind CSS.
 
-First, run the development server:
+## 🚀 Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Authentication**: Secure login system for authorized access.
+- **Dashboard**: Overview and analytics interface with data visualization.
+- **Submissions (Pengajuan)**: Interface to effortlessly submit and track approval requests.
+- **Modern UI**: Polished, responsive interactions built with Tailwind CSS v4 and shadcn/ui components.
+- **State Management**: Seamless global state handling utilizing Zustand.
+
+## 🛠️ Tech Stack
+
+- **Framework:** [Next.js 16](https://nextjs.org/) (App Router)
+- **Library:** [React 19](https://react.dev/)
+- **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
+- **UI Components:** [shadcn/ui](https://ui.shadcn.com/)
+- **State Management:** [Zustand](https://github.com/pmndrs/zustand)
+- **Icons:** [Lucide React](https://lucide.dev/icons/)
+- **HTTP Client:** [Axios](https://axios-http.com/)
+- **Charts:** [Recharts](https://recharts.org/)
+
+## 📦 Installation
+
+To get the project running locally, follow these steps:
+
+### Prerequisites
+
+- Node.js (v20 or higher recommended)
+- Package Manager: npm, yarn, pnpm, or bun
+
+### Steps
+
+1. **Clone the repository** (if not already cloned):
+   ```bash
+   git clone <repository-url>
+   cd approval-sistem-fe
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   # or
+   yarn install
+   # or
+   pnpm install
+   ```
+
+3. **Environment Setup**:
+   Check if there are required environment variables. A `.env.local` file may be needed in the root directory (e.g., to point to the backend API). If a `.env.example` is provided, copy it:
+   ```bash
+   cp .env.example .env.local
+   ```
+   *(Ensure you configure keys such as `NEXT_PUBLIC_API_URL` based on the backend environment)*
+
+4. **Run the development server**:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   # or
+   pnpm dev
+   ```
+
+5. **Open the application**:
+   Navigate to [http://localhost:3000](http://localhost:3000) in your web browser.
+
+## 📁 Project Structure
+
+```text
+├── app/                  # Next.js App Router folders
+│   ├── (auth)/login      # Authentication pages
+│   └── (protected)/      # Protected routes (Dashboard, Pengajuan)
+├── components/           # Reusable UI components
+├── lib/                  # Utility functions
+├── store/                # Zustand state management slices
+├── public/               # Static assets
+└── types/                # TypeScript type definitions
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📜 Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `npm run dev`: Starts the local development server.
+- `npm run build`: Creates an optimized production build for deployment.
+- `npm run start`: Starts the application in production mode.
+- `npm run lint`: Runs ESLint to statically analyze the code and find potential issues.
