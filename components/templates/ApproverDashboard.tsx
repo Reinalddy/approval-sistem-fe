@@ -121,7 +121,7 @@ export default function ApproverDashboard() {
                                                 onClick={() => setConfirmDialog({ isOpen: true, id: claim.id, actionType: 'approve', statusValue: 'approved' })}
                                                 disabled={actionLoading?.id === claim.id}
                                             >
-                                                {actionLoading?.id === claim.id && actionLoading.action === 'approve' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4" />}
+                                                {actionLoading?.id === claim.id && actionLoading?.action === 'approve' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4" />}
                                             </Button>
                                             <Button
                                                 size="sm"
@@ -129,7 +129,7 @@ export default function ApproverDashboard() {
                                                 onClick={() => setConfirmDialog({ isOpen: true, id: claim.id, actionType: 'reject', statusValue: 'rejected' })}
                                                 disabled={actionLoading?.id === claim.id}
                                             >
-                                                {actionLoading?.id === claim.id && actionLoading.action === 'reject' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsDown className="w-4 h-4" />}
+                                                {actionLoading?.id === claim.id && actionLoading?.action === 'reject' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsDown className="w-4 h-4" />}
                                             </Button>
                                         </>
                                     )}
