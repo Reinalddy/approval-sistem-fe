@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FilePlus, Send, Loader2, Image as ImageIcon, Eye } from 'lucide-react';
+import { FilePlus, Send, Loader2, Image as ImageIcon, Eye, X } from 'lucide-react';
 import { toast } from "sonner";
 
 export default function UserDashboard() {
@@ -24,6 +24,7 @@ export default function UserDashboard() {
     // amount disimpan sebagai string angka murni (tanpa titik)
     const [formData, setFormData] = useState({ title: '', description: '', amount: '' });
     const [file, setFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [selectedClaim, setSelectedClaim] = useState<any | null>(null);
@@ -58,6 +59,27 @@ export default function UserDashboard() {
             setActionLoading(null);
             setConfirmDialog({ isOpen: false, id: null });
         }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selectedFile = e.target.files ? e.target.files[0] : null;
+        setFile(selectedFile);
+
+        if (selectedFile) {
+            // Buat URL sementara untuk dirender di layar
+            const objectUrl = URL.createObjectURL(selectedFile);
+            setPreviewUrl(objectUrl);
+        } else {
+            setPreviewUrl(null);
+        }
+    };
+
+    const removeSelectedFile = () => {
+        setFile(null);
+        setPreviewUrl(null);
+        // Opsional: reset nilai input file di DOM jika perlu
+        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
     };
 
     // --- FUNGSI BARU: Validasi dan Submit Form ---
@@ -204,7 +226,27 @@ export default function UserDashboard() {
                             </div>
                             <div className="space-y-2">
                                 <Label>Upload Bukti (Opsional)</Label>
-                                <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} />
+                                <Input type="file" accept="image/*" onChange={handleFileChange} id='file-upload' />
+                                {/* BLOK PREVIEW GAMBAR */}
+                                {previewUrl && (
+                                    <div className="relative mt-3 p-2 border rounded-md bg-slate-50 flex justify-center">
+                                        <img
+                                            src={previewUrl}
+                                            alt="Preview Bukti"
+                                            className="max-h-48 object-contain rounded-md"
+                                        />
+                                        {/* Tombol silang untuk membatalkan file */}
+                                        <Button
+                                            type="button"
+                                            variant="destructive"
+                                            size="icon"
+                                            className="absolute top-2 right-2 h-6 w-6 rounded-full shadow-sm"
+                                            onClick={removeSelectedFile}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="pt-4 flex justify-end gap-2">
